@@ -11,6 +11,11 @@ export function Footer() {
             <p className="text-gray-500 dark:text-gray-400 text-sm">
               Supporting the Addison's Disease community with comprehensive care management tools.
             </p>
+            <p className="text-gray-500 dark:text-gray-400 text-sm">
+              <a href="mailto:hello@addipath.com" className="hover:text-blue-600 dark:hover:text-blue-400">
+                hello@addipath.com
+              </a>
+            </p>
           </div>
           <div>
             <h3 className="text-sm font-semibold text-gray-400 dark:text-gray-500 tracking-wider uppercase">Support</h3>
@@ -60,7 +65,7 @@ export function Footer() {
         </div>
         <div className="mt-8 border-t border-gray-200 dark:border-gray-700 pt-8">
           <p className="text-base text-gray-400 dark:text-gray-500 text-center">
-            © 2024 AddiPath. All rights reserved.
+            © 2025 AddiPath. All rights reserved.
           </p>
         </div>
       </div>

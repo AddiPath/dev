@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useForum } from '../../context/ForumContext';
 import { AlertTriangle, MessageSquare, Search, Plus } from 'lucide-react';
@@ -6,68 +6,37 @@ import { Thread } from './Thread';
 
 interface ForumPost {
   id: string;
-  userId: string;
-  userName: string;
+  user_id: string;
+  topic_id: string;
   title: string;
   content: string;
-  createdAt: string;
-  replies: number;
-  topicId: string;
+  created_at: string;
+  user: {
+    name: string;
+  };
+  replies_count: number;
 }
-
-const MOCK_POSTS: ForumPost[] = [
-  {
-    id: '1',
-    userId: '2',
-    userName: 'Test User',
-    title: 'New to Addison\'s - Need Advice',
-    content: 'Recently diagnosed and looking for tips on managing daily routines. Would really appreciate any advice on:\n\n1. Managing medication timing\n2. Exercise recommendations\n3. Diet tips\n4. Stress management\n\nThanks in advance for any help!',
-    createdAt: '2024-03-10T10:00:00Z',
-    replies: 5,
-    topicId: '1'
-  },
-  {
-    id: '2',
-    userId: '2',
-    userName: 'Test User',
-    title: 'Hydrocortisone Timing Question',
-    content: 'Looking for advice on the best timing for hydrocortisone doses. Currently taking my doses at 8am, 12pm, and 4pm, but still experiencing afternoon fatigue. Has anyone found a different timing that works better for them?',
-    createdAt: '2024-03-11T10:00:00Z',
-    replies: 3,
-    topicId: '2'
-  },
-  {
-    id: '3',
-    userId: '2',
-    userName: 'Sarah Johnson',
-    title: 'Daily Exercise Routine',
-    content: 'How do you manage your exercise routine with Addison\'s? I\'m trying to stay active but finding it challenging to balance energy levels with workouts. Would love to hear what works for others!',
-    createdAt: '2024-03-12T10:00:00Z',
-    replies: 7,
-    topicId: '3'
-  },
-  {
-    id: '4',
-    userId: '2',
-    userName: 'Michael Chen',
-    title: 'Support Group Meetups',
-    content: 'Anyone interested in forming a local support group? I think it would be great to meet others with Addison\'s in person and share experiences. We could organize monthly meetups and maybe have guest speakers occasionally.',
-    createdAt: '2024-03-13T10:00:00Z',
-    replies: 4,
-    topicId: '4'
-  }
-];
 
 export function Forum() {
   const { user, users } = useAuth();
-  const { topics } = useForum();
+  const { topics, getPosts, loading, error } = useForum();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
   const [selectedPost, setSelectedPost] = useState<ForumPost | null>(null);
+  const [posts, setPosts] = useState<ForumPost[]>([]);
 
   // Check if the current user is banned
   const currentUser = users.find(u => u.id === user?.id);
   const isUserBanned = currentUser?.isForumBanned;
+
+  useEffect(() => {
+    loadPosts();
+  }, [selectedTopic]);
+
+  const loadPosts = async () => {
+    const loadedPosts = await getPosts(selectedTopic);
+    setPosts(loadedPosts);
+  };
 
   if (isUserBanned) {
     return (
@@ -91,11 +60,10 @@ export function Forum() {
     );
   }
 
-  const filteredPosts = MOCK_POSTS.filter(post => {
+  const filteredPosts = posts.filter(post => {
     const matchesSearch = post.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          post.content.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesTopic = selectedTopic ? post.topicId === selectedTopic : true;
-    return matchesSearch && matchesTopic;
+    return matchesSearch;
   });
 
   const formatDate = (dateStr: string) => {
@@ -107,6 +75,35 @@ export function Forum() {
       minute: '2-digit'
     });
   };
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+          <p className="mt-2 text-gray-600">Loading forum...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="bg-red-50 border-l-4 border-red-400 p-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <AlertTriangle className="h-5 w-5 text-red-400" />
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800">Error</h3>
+              <p className="mt-2 text-sm text-red-700">{error}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -195,12 +192,12 @@ export function Forum() {
                           <div>
                             <h3 className="text-lg font-medium text-gray-900">{post.title}</h3>
                             <p className="mt-1 text-sm text-gray-500">
-                              Posted by {post.userName} • {formatDate(post.createdAt)}
+                              Posted by {post.user.name} • {formatDate(post.created_at)}
                             </p>
                           </div>
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                             <MessageSquare className="h-4 w-4 mr-1" />
-                            {post.replies} replies
+                            {post.replies_count} replies
                           </span>
                         </div>
                         <p className="mt-4 text-gray-700 line-clamp-2">{post.content}</p>

@@ -20,6 +20,7 @@ import { ForumProvider } from './context/ForumContext';
 import { PersistenceProvider } from './context/PersistenceContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ContentProvider } from './context/ContentContext';
+import { AuthCallback } from './components/Auth/AuthCallback';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
@@ -53,6 +54,7 @@ export default function App() {
                       <Route path="/terms" element={<Terms />} />
                       <Route path="/addisons-info" element={<AddisonsInfo />} />
                       <Route path="/membership" element={<MembershipComparison />} />
+                      <Route path="/auth/callback" element={<AuthCallback />} />
                       <Route path="/forum" element={
                         <PrivateRoute>
                           <Forum />

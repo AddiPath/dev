@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-import { User, EmergencyID, AuthCredentials } from '../types/auth';
-import { authenticateUser, createUser, signOutUser } from '../utils/auth';
+import { User, EmergencyID } from '../types/auth';
+import { authenticateUser, createUser, signOutUser, getCurrentUser, signInWithGoogle, handleAuthCallback } from '../utils/auth';
+import { supabase } from '../utils/supabase';
 
 interface AuthContextType {
   user: User | null;
@@ -8,6 +9,7 @@ interface AuthContextType {
   loading: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   signup: (email: string, password: string) => Promise<boolean>;
+  loginWithGoogle: () => Promise<boolean>;
   logout: () => Promise<boolean>;
   isAuthenticated: boolean;
   isAdmin: boolean;
@@ -17,55 +19,73 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const mockUsers: User[] = [
-  {
-    id: '1',
-    email: 'admin@addipath.com',
-    name: 'Admin',
-    role: 'admin',
-    isForumBanned: false
-  },
-  {
-    id: '2',
-    email: 'user@example.com',
-    name: 'Test User',
-    role: 'user',
-    isForumBanned: false
-  },
-  {
-    id: '3',
-    email: 'jane@example.com',
-    name: 'Jane Smith',
-    role: 'user',
-    isForumBanned: false
-  }
-];
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(() => {
-    try {
-      const savedUser = localStorage.getItem('user');
-      return savedUser ? JSON.parse(savedUser) : null;
-    } catch (error) {
-      console.error('Error reading user from localStorage:', error);
-      return null;
-    }
-  });
-  
-  const [loading, setLoading] = useState(false);
-  const [users] = useState<User[]>(mockUsers);
+  const [user, setUser] = useState<User | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Clear user state if localStorage is cleared
   useEffect(() => {
-    const handleStorage = (e: StorageEvent) => {
-      if (e.key === 'user' && !e.newValue) {
-        setUser(null);
+    // Check for existing session and handle auth callback
+    const initAuth = async () => {
+      try {
+        // Check if we're handling an auth callback
+        if (window.location.pathname === '/auth/callback') {
+          const callbackUser = await handleAuthCallback();
+          if (callbackUser) {
+            setUser(callbackUser);
+            // Redirect to dashboard after successful social login
+            window.location.href = '/dashboard';
+            return;
+          }
+        }
+
+        // Check for existing session
+        const currentUser = await getCurrentUser();
+        setUser(currentUser);
+      } catch (error) {
+        console.error('Auth initialization error:', error);
+      } finally {
+        setLoading(false);
       }
     };
 
-    window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
+    initAuth();
+
+    // Subscribe to auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        const currentUser = await getCurrentUser();
+        setUser(currentUser);
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+      }
+    });
+
+    // Cleanup subscription
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
+
+  // Load users for admin functionality
+  useEffect(() => {
+    const loadUsers = async () => {
+      if (user?.role === 'admin') {
+        try {
+          const { data, error } = await supabase
+            .from('users')
+            .select('*');
+
+          if (error) throw error;
+          setUsers(data);
+        } catch (error) {
+          console.error('Error loading users:', error);
+        }
+      }
+    };
+
+    loadUsers();
+  }, [user]);
 
   const login = async (email: string, password: string) => {
     setLoading(true);
@@ -84,12 +104,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const loginWithGoogle = async () => {
+    setLoading(true);
+    try {
+      await signInWithGoogle();
+      return true;
+    } catch (error) {
+      console.error('Google login error:', error);
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const signup = async (email: string, password: string) => {
     setLoading(true);
     try {
       const newUser = await createUser({ email, password });
-      setUser(newUser);
-      return true;
+      if (newUser) {
+        setUser(newUser);
+        return true;
+      }
+      return false;
     } catch (error) {
       console.error('Signup error:', error);
       return false;
@@ -112,19 +148,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const updateEmergencyId = (data: EmergencyID) => {
-    if (user) {
-      const updatedUser = { ...user, emergencyId: data };
-      setUser(updatedUser);
-      localStorage.setItem('user', JSON.stringify(updatedUser));
+  const updateEmergencyId = async (data: EmergencyID) => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ emergency_id: data })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      setUser(prev => prev ? { ...prev, emergencyId: data } : null);
+    } catch (error) {
+      console.error('Error updating emergency ID:', error);
     }
   };
 
-  const toggleForumBan = (userId: string) => {
-    if (user && user.id === userId) {
-      const updatedUser = { ...user, isForumBanned: !user.isForumBanned };
-      setUser(updatedUser);
-      localStorage.setItem('user', JSON.stringify(updatedUser));
+  const toggleForumBan = async (userId: string) => {
+    if (!user?.role === 'admin') return;
+
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .update({ is_forum_banned: !users.find(u => u.id === userId)?.isForumBanned })
+        .eq('id', userId)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Update local state
+      setUsers(prev => prev.map(u => 
+        u.id === userId ? { ...u, isForumBanned: data.is_forum_banned } : u
+      ));
+
+      // Update current user if they were banned
+      if (user?.id === userId) {
+        setUser(prev => prev ? { ...prev, isForumBanned: data.is_forum_banned } : null);
+      }
+    } catch (error) {
+      console.error('Error toggling forum ban:', error);
     }
   };
 
@@ -135,6 +199,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       login,
       signup,
+      loginWithGoogle,
       logout,
       isAuthenticated: !!user,
       isAdmin: user?.role === 'admin',

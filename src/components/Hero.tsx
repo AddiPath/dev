@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useContent } from '../context/ContentContext';
 import { Link } from 'react-router-dom';
 import { UpgradeButton } from './Upgrade/UpgradeButton';
+import logoImage from '../assets/images/logo.png';
 
 export function Hero() {
   const { isAuthenticated, user } = useAuth();
@@ -29,6 +30,9 @@ export function Hero() {
                 </>
               ) : (
                 <>
+                  <div className="flex justify-center lg:justify-start mb-6">
+                    <img src={logoImage} alt="AddiPath Logo" className="h-32 w-auto" />
+                  </div>
                   <h1 className="text-4xl tracking-tight font-extrabold text-gray-900 dark:text-white sm:text-5xl md:text-6xl">
                     <span className="block">{heroTitle}</span>
                     <span className="block text-blue-600 dark:text-blue-400">Made Simple</span>

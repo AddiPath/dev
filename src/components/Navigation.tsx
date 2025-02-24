@@ -1,12 +1,8 @@
 import React from 'react';
-import { Menu, X, User, LogOut, Crown, MessageSquare } from 'lucide-react';
+import { Menu, X, LogOut, Crown, MessageSquare } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ThemeToggle } from './ThemeToggle';
-import { Activity } from 'lucide-react'; // Temporary fallback icon
-
-// Instead of importing the logo directly, we'll use a more reliable public URL approach
-const logoUrl = '/src/assets/images/logo.png';
 
 interface NavigationProps {
   isMenuOpen: boolean;
@@ -27,23 +23,8 @@ export function Navigation({ isMenuOpen, setIsMenuOpen }: NavigationProps) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16 items-center">
           <div className="flex items-center">
-            <Link to="/" className="flex items-center">
-              {/* Add error handling for the logo */}
-              <img 
-                src={logoUrl}
-                alt="AddiPath Logo"
-                className="h-8 w-auto"
-                onError={(e) => {
-                  // If logo fails to load, show a fallback icon
-                  const target = e.target as HTMLImageElement;
-                  target.style.display = 'none';
-                  // Create and append the fallback icon
-                  const fallbackIcon = document.createElement('div');
-                  fallbackIcon.className = 'h-8 w-8 text-blue-600 dark:text-blue-400';
-                  fallbackIcon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>';
-                  target.parentNode?.appendChild(fallbackIcon);
-                }}
-              />
+            <Link to="/" className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400">
+              Home
             </Link>
           </div>
           

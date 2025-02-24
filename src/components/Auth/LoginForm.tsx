@@ -23,7 +23,7 @@ export function LoginForm() {
         const redirectPath = isAdmin ? '/admin' : '/dashboard';
         navigate(redirectPath, { replace: true });
       } else {
-        setError('Invalid credentials');
+        setError('Invalid email or password');
       }
     } catch (err) {
       setError('An error occurred during login');
@@ -37,15 +37,10 @@ export function LoginForm() {
     setIsLoading(true);
 
     try {
-      const success = await loginWithGoogle();
-      if (success) {
-        navigate('/dashboard', { replace: true });
-      } else {
-        setError('Could not sign in with Google');
-      }
+      await loginWithGoogle();
+      // No need to navigate - the auth callback will handle it
     } catch (err) {
-      setError('An error occurred during Google sign-in');
-    } finally {
+      setError('Could not sign in with Google');
       setIsLoading(false);
     }
   };

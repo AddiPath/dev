@@ -1,124 +1,92 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useForum } from '../../context/ForumContext';
 import { ArrowLeft, MessageSquare, Heart, Reply as ReplyIcon } from 'lucide-react';
 
 interface Reply {
   id: string;
-  postId: string;
-  userId: string;
-  userName: string;
+  post_id: string;
+  user_id: string;
   content: string;
-  createdAt: string;
+  parent_id: string | null;
+  created_at: string;
+  user: {
+    name: string;
+  };
   likes: number;
-  isLiked: boolean;
-  parentId?: string;
+  is_liked: boolean;
   replies: Reply[];
 }
 
 interface ThreadProps {
   post: {
     id: string;
-    userId: string;
-    userName: string;
+    user_id: string;
     title: string;
     content: string;
-    createdAt: string;
-    replies: number;
-    topicId: string;
+    created_at: string;
+    user: {
+      name: string;
+    };
   };
   onBack: () => void;
 }
 
 export function Thread({ post, onBack }: ThreadProps) {
   const { user } = useAuth();
+  const { getReplies, addReply, toggleLike } = useForum();
   const [replies, setReplies] = useState<Reply[]>([]);
   const [replyContent, setReplyContent] = useState('');
   const [replyingTo, setReplyingTo] = useState<Reply | null>(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const savedReplies = localStorage.getItem(`thread_${post.id}_replies`);
-    if (savedReplies) {
-      setReplies(JSON.parse(savedReplies));
-    }
+    loadReplies();
   }, [post.id]);
 
-  const saveRepliesToStorage = (updatedReplies: Reply[]) => {
-    localStorage.setItem(`thread_${post.id}_replies`, JSON.stringify(updatedReplies));
-  };
-
-  const handleLike = (replyId: string) => {
-    const updateLikes = (replyList: Reply[]): Reply[] => {
-      return replyList.map(reply => {
-        if (reply.id === replyId) {
-          return {
-            ...reply,
-            likes: reply.isLiked ? reply.likes - 1 : reply.likes + 1,
-            isLiked: !reply.isLiked
-          };
-        }
-        if (reply.replies.length > 0) {
-          return {
-            ...reply,
-            replies: updateLikes(reply.replies)
-          };
-        }
-        return reply;
-      });
-    };
-
-    const updatedReplies = updateLikes(replies);
-    setReplies(updatedReplies);
-    saveRepliesToStorage(updatedReplies);
-  };
-
-  const addReplyToThread = (newReply: Reply, parentId?: string) => {
-    if (!parentId) {
-      return [...replies, newReply];
+  const loadReplies = async () => {
+    setLoading(true);
+    try {
+      const loadedReplies = await getReplies(post.id);
+      setReplies(loadedReplies);
+    } finally {
+      setLoading(false);
     }
-
-    const addReplyToParent = (replyList: Reply[]): Reply[] => {
-      return replyList.map(reply => {
-        if (reply.id === parentId) {
-          return {
-            ...reply,
-            replies: [...(reply.replies || []), newReply]
-          };
-        }
-        if (reply.replies && reply.replies.length > 0) {
-          return {
-            ...reply,
-            replies: addReplyToParent(reply.replies)
-          };
-        }
-        return reply;
-      });
-    };
-
-    return addReplyToParent(replies);
   };
 
-  const handleSubmitReply = (e: React.FormEvent) => {
+  const handleSubmitReply = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !replyContent.trim()) return;
 
-    const newReply: Reply = {
-      id: Date.now().toString(),
-      postId: post.id,
-      userId: user.id,
-      userName: user.name,
+    const newReply = await addReply({
+      post_id: post.id,
+      user_id: user.id,
       content: replyContent.trim(),
-      createdAt: new Date().toISOString(),
-      likes: 0,
-      isLiked: false,
-      parentId: replyingTo?.id,
-      replies: []
-    };
+      parent_id: replyingTo?.id || null
+    });
 
-    const updatedReplies = addReplyToThread(newReply, replyingTo?.id);
-    setReplies(updatedReplies);
-    saveRepliesToStorage(updatedReplies);
-    setReplyContent('');
-    setReplyingTo(null);
+    if (newReply) {
+      if (replyingTo) {
+        setReplies(prev => prev.map(reply => {
+          if (reply.id === replyingTo.id) {
+            return {
+              ...reply,
+              replies: [...reply.replies, newReply]
+            };
+          }
+          return reply;
+        }));
+      } else {
+        setReplies(prev => [...prev, newReply]);
+      }
+      setReplyContent('');
+      setReplyingTo(null);
+    }
+  };
+
+  const handleLike = async (replyId: string) => {
+    await toggleLike(replyId);
+    await loadReplies(); // Reload to get updated likes
   };
 
   const formatDate = (dateStr: string) => {
@@ -136,17 +104,17 @@ export function Thread({ post, onBack }: ThreadProps) {
       <div className="bg-white rounded-lg shadow-sm p-4 mb-4">
         <div className="flex justify-between items-start">
           <div>
-            <p className="font-medium text-gray-900">{reply.userName}</p>
-            <p className="text-sm text-gray-500">{formatDate(reply.createdAt)}</p>
+            <p className="font-medium text-gray-900">{reply.user.name}</p>
+            <p className="text-sm text-gray-500">{formatDate(reply.created_at)}</p>
           </div>
           <div className="flex items-center space-x-2">
             <button
               onClick={() => handleLike(reply.id)}
               className={`flex items-center space-x-1 ${
-                reply.isLiked ? 'text-red-500' : 'text-gray-400 hover:text-red-500'
+                reply.is_liked ? 'text-red-500' : 'text-gray-400 hover:text-red-500'
               }`}
             >
-              <Heart className="h-4 w-4" fill={reply.isLiked ? 'currentColor' : 'none'} />
+              <Heart className="h-4 w-4" fill={reply.is_liked ? 'currentColor' : 'none'} />
               <span className="text-sm">{reply.likes}</span>
             </button>
             <button
@@ -166,6 +134,15 @@ export function Thread({ post, onBack }: ThreadProps) {
     </div>
   );
 
+  if (loading) {
+    return (
+      <div className="text-center py-12">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+        <p className="mt-2 text-gray-600">Loading discussion...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="bg-white rounded-lg shadow-sm overflow-hidden">
       <div className="p-6">
@@ -180,16 +157,16 @@ export function Thread({ post, onBack }: ThreadProps) {
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-gray-900">{post.title}</h1>
           <div className="mt-2 flex items-center text-gray-500">
-            <span>Posted by {post.userName}</span>
+            <span>Posted by {post.user.name}</span>
             <span className="mx-2">•</span>
-            <span>{formatDate(post.createdAt)}</span>
+            <span>{formatDate(post.created_at)}</span>
           </div>
           <p className="mt-4 text-gray-700 whitespace-pre-wrap">{post.content}</p>
         </div>
 
         <div className="border-t pt-6">
           <h2 className="text-lg font-medium text-gray-900 mb-4">
-            {replyingTo ? `Replying to ${replyingTo.userName}` : 'Leave a Reply'}
+            {replyingTo ? `Replying to ${replyingTo.user.name}` : 'Leave a Reply'}
           </h2>
           {user ? (
             <form onSubmit={handleSubmitReply} className="space-y-4">
